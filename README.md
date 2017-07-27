@@ -1,4 +1,4 @@
-# forkulator++
+# forkulator-p
 
 Simulator for purging and non-purging fork-join queueing systems.
 
