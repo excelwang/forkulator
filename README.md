@@ -1,6 +1,6 @@
-# forkulator
+# forkulator++
 
-Simulator for fork-join queueing systems.
+Simulator for purign and non-purging fork-join queueing systems.
 
 Fork-join queueing systems are models for several kinds of real-world systems, such as multi-path routing and parallelized computing architectures.  The canonical model has a system with _k_ parallel servers and jobs arriving that are composed of _k_ tasks.  Upon arrival the _k_ tasks are queued at the _k_ servers.  A job can depart when each of its tasks has finished processing.
 
@@ -42,6 +42,8 @@ We include a runner script, `forkulator.sh`, that saves you from having to type 
 * `-q tr` random thinning without resequencing
 * `-q trr` random thinning with resequencing
 * `-q wkl <l_diff>` standard "worker-queue" _(k,l)_ system with *k-l=l_diff*
+* `-q wklnc <l_diff>` standard non-purging "worker-queue" _(k,l)_ system with *k-l=l_diff*
+* `-q wklncr <l_diff>` standard non-purging-running "worker-queue" _(k,l)_ system with *k-l=l_diff*
 * `-q skl <l_diff>` "single-queue" _(k,l)_ system with *k-l=l_diff*
 * `-q msw <h>` multi-stage worker-queue system with _h_ stages.  Each task has the same service time at each stage.
 * `-q mswi <h>` multi-stage worker-queue system with _h_ stages.  The tasks' service times at each stage are iid.
