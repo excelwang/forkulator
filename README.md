@@ -8,7 +8,7 @@ There are several variations on the model.  This package simulates many types of
 
 ## Build
 
-  `ant`
+  `IntelliJ IDEA`
   
 ## Run
 
