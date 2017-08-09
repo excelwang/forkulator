@@ -41,9 +41,9 @@ We include a runner script, `forkulator.sh`, that saves you from having to type 
 * `-q tdr` deterministic thinning with resequencing
 * `-q tr` random thinning without resequencing
 * `-q trr` random thinning with resequencing
-* `-q wkl <l_diff>` standard "worker-queue" _(k,l)_ system with *k-l=l_diff*
+* `-q wkl <l_diff>` standard purging "worker-queue" _(k,l)_ system with *k-l=l_diff*
 * `-q wklnc <l_diff>` standard non-purging "worker-queue" _(k,l)_ system with *k-l=l_diff*
-* `-q wklncr <l_diff>` standard non-purging-running "worker-queue" _(k,l)_ system with *k-l=l_diff*
+* `-q wklncr <l_diff>` standard non-purging-running-task "worker-queue" _(k,l)_ system with *k-l=l_diff*
 * `-q skl <l_diff>` "single-queue" _(k,l)_ system with *k-l=l_diff*
 * `-q msw <h>` multi-stage worker-queue system with _h_ stages.  Each task has the same service time at each stage.
 * `-q mswi <h>` multi-stage worker-queue system with _h_ stages.  The tasks' service times at each stage are iid.
