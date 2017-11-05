@@ -1,6 +1,8 @@
 package forkulator;
 
 
+import java.util.HashMap;
+
 public class FJJob implements Comparable<FJJob> {
 	
 	// essential data about the job
@@ -10,7 +12,11 @@ public class FJJob implements Comparable<FJJob> {
 	
 	// the job's tasks
 	public int num_tasks = 0;
+
 	public FJTask[] tasks = null;
+	public HashMap<FJWorker,FJTask> queuing_tasks = null;
+	public HashMap<FJWorker,FJTask> running_tasks = null;
+	public HashMap<FJWorker,FJTask> completed_tasks = null;
 	
 	// index to keep track of which tasks have been pulled out for service
 	private int task_index = 0;
@@ -38,6 +44,9 @@ public class FJJob implements Comparable<FJJob> {
 		this.num_tasks = num_tasks;
 		
 		tasks = new FJTask[this.num_tasks];
+		queuing_tasks =new HashMap<>();
+		running_tasks =new HashMap<>();
+		completed_tasks =new HashMap<>();
 		for (int i=0; i<this.num_tasks; i++) {
 			tasks[i] = new FJTask(service_process, arrival_time, this);
 		}
@@ -76,6 +85,9 @@ public class FJJob implements Comparable<FJJob> {
 			t.job = null;
 		}
 		this.tasks = null;
+		this.queuing_tasks = null;
+		this.running_tasks = null;
+		this.completed_tasks = null;
 	}
 	
 	

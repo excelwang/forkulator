@@ -1,5 +1,7 @@
 package forkulator;
 
+import java.io.FileNotFoundException;
+import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.LinkedList;
 
@@ -86,18 +88,32 @@ public class FJSimulator {
 			}
 		} else if (server_queue_type.toLowerCase().equals("wkl")) {
 			if (server_queue_spec.length != 2) {
-				System.err.println("ERROR: wkl/skl queue requires a numeric (k-l) parameter");
+				System.err.println("ERROR: wkl/wklncr/wklnc/skl queue requires a numeric (k-l) parameter");
 				System.exit(0);
 			}
 			int l_diff = Integer.parseInt(server_queue_spec[1]);
-			this.server = new FJKLWorkerQueueServer(num_workers, num_workers - l_diff);
+			this.server = new FJKLWorkerQueueServer(num_workers, num_tasks - l_diff,true,true);
+		} else if (server_queue_type.toLowerCase().equals("wklncr")) {
+			if (server_queue_spec.length != 2) {
+				System.err.println("ERROR: wkl/wklncr/wklnc/skl queue requires a numeric (k-l) parameter");
+				System.exit(0);
+			}
+			int l_diff = Integer.parseInt(server_queue_spec[1]);
+			this.server = new FJKLWorkerQueueServer(num_workers, num_tasks - l_diff,true,false);
+		} else if (server_queue_type.toLowerCase().equals("wklnc")) {
+			if (server_queue_spec.length != 2) {
+				System.err.println("ERROR: wkl/wklncr/wklnc/skl queue requires a numeric (k-l) parameter");
+				System.exit(0);
+			}
+			int l_diff = Integer.parseInt(server_queue_spec[1]);
+			this.server = new FJKLWorkerQueueServer(num_workers, num_tasks - l_diff,false,false);
 		} else if (server_queue_type.toLowerCase().equals("skl")) {
 			if (server_queue_spec.length != 2) {
-				System.err.println("ERROR: wkl/skl queue requires a numeric (k-l) parameter");
+				System.err.println("ERROR: wkl/wklncr/wklnc/skl queue requires a numeric (k-l) parameter");
 				System.exit(0);
 			}
 			int l_diff = Integer.parseInt(server_queue_spec[1]);
-			this.server = new FJKLSingleQueueServer(num_workers, num_workers - l_diff);
+			this.server = new FJKLSingleQueueServer(num_workers, num_tasks - l_diff);
 		} else if (server_queue_type.toLowerCase().startsWith("msw")) {
 			if (server_queue_spec.length != 2) {
 				System.err.println("ERROR: msw/mswi queue requires a numeric num_stages parameter");
@@ -129,8 +145,8 @@ public class FJSimulator {
 	 */
 	public void run(long num_jobs, int sampling_interval) {
 		// compute the warmup period.
-		// Let's say sampling_interval*10*num_stages
-		int warmup_interval = sampling_interval * 10 * server.num_stages;
+		// Let's say sampling_interval*1000*num_stages
+		int warmup_interval = sampling_interval * 1000 * server.num_stages;
 		
 		// before we generated all the job arrivals at once
 		// now to save space we only have one job arrival in the queue at a time
@@ -150,7 +166,7 @@ public class FJSimulator {
 			if (e instanceof QJobArrivalEvent) {
 				jobs_processed++;
 				if (((jobs_processed*100)%num_jobs)==0)
-					System.err.println("   ... "+(100*jobs_processed/num_jobs)+"%");
+					System.err.println("   ... "+(100*jobs_processed/num_jobs)+"%\n");
 				QJobArrivalEvent et = (QJobArrivalEvent) e;
 				FJJob job = new FJJob(num_tasks, service_process, e.time);
 				job.arrival_time = et.time;
@@ -179,12 +195,31 @@ public class FJSimulator {
 				}
 			} else if (e instanceof QTaskCompletionEvent) {
 				QTaskCompletionEvent et = (QTaskCompletionEvent) e;
+				if(et.task.job==null){//orphan serviced tasks
+					if (server instanceof FJKLWorkerQueueServer){
+						if(((FJKLWorkerQueueServer) server).cancelLeftRunning) continue;//pass invalid events.
+					}else {
+						System.err.println("ERROR: orphan tasks appeared in none FJKLWorkerQueueServer.");
+					}
+				}
 				server.taskCompleted(et.task.worker, et.time);
 			}
 		}
 	}
 	
-	
+	public void removeJobEvent(FJJob j){
+		for (QEvent e : this.event_queue) {
+			if (e instanceof QTaskCompletionEvent){
+				QTaskCompletionEvent et=(QTaskCompletionEvent) e;
+				if(et.task.job==j){
+					this.event_queue.remove(et);
+					et.task.worker.current_task=null;
+					System.out.println("task completed event removed");
+				}
+			}
+		}
+	}
+
 	/**
 	 * add an event to the simulation queue
 	 * 
@@ -229,8 +264,7 @@ public class FJSimulator {
 	
 	/**
 	 * compute the means of sojourn, waiting, and service times over (almost) all jobs
-	 * 
-	 * @param warmup_period
+	 *
 	 * @return
 	 */
 	public ArrayList<Double> experimentMeans() {
@@ -396,7 +430,7 @@ public class FJSimulator {
 		cli_options.addOption("n", "numsamples", true, "number of samples to produce.  Multiply this by the sampling interval to get the number of jobs that will be run");
 		cli_options.addOption("i", "samplinginterval", true, "samplig interval");
 		cli_options.addOption("p", "savepath", true, "save some iterations of the simulation path (arrival time, service time etc...)");
-		cli_options.addOption(OptionBuilder.withLongOpt("queuetype").hasArgs().isRequired().withDescription("queue type and arguments").create("q"));
+		cli_options.addOption(OptionBuilder.withLongOpt("queuetype").hasArgs().isRequired().withDescription("queue type and arguments (w/s/wkl/wklncr/wklnc/skl/...)").create("q"));
 		cli_options.addOption(OptionBuilder.withLongOpt("outfile").hasArg().isRequired().withDescription("the base name of the output files").create("o"));
 		cli_options.addOption(OptionBuilder.withLongOpt("arrivalprocess").hasArgs().isRequired().withDescription("arrival process").create("A"));
 		cli_options.addOption(OptionBuilder.withLongOpt("serviceprocess").hasArgs().isRequired().withDescription("service process").create("S"));
@@ -450,31 +484,34 @@ public class FJSimulator {
 		// start the simulator running...
 		sim.run(num_jobs, sampling_interval);
 		
-		if (sim.data_aggregator.path_logger != null) {
-			sim.data_aggregator.path_logger.writePathlog(outfile_base, false);
-		}
+		//if (sim.data_aggregator.path_logger != null) {
+		//	sim.data_aggregator.path_logger.writePathlog(outfile_base, false);
+		//}
 		
-		data_aggregator.printExperimentDistributions(outfile_base, sim.binwidth);
+		//data_aggregator.printExperimentDistributions(outfile_base, sim.binwidth);
 		
-		data_aggregator.printRawJobData(outfile_base);
+		//data_aggregator.printRawJobData(outfile_base);
 		
 		ArrayList<Double> means = data_aggregator.experimentMeans();
+		int k=server_queue_spec.length>1?num_tasks-Integer.parseInt(server_queue_spec[1]):num_tasks;
 		System.out.println(
-				num_workers
-				+"\t"+num_tasks
-				+"\t"+sim.server.num_stages
-				+"\t"+sim.arrival_process.processParameters()
-				+"\t"+sim.service_process.processParameters()
-				+"\t"+means.get(0) // sojourn mean
-				+"\t"+means.get(1) // waiting mean
-				+"\t"+means.get(2) // service mean
-				+"\t"+means.get(3) // total
-				+"\t"+means.get(4) // sojourn quantile
-				+"\t"+means.get(5) // waiting quantile
-				+"\t"+means.get(6) // service quanile
-				+"\t"+means.get(7) // sojourn quantile 2
-				+"\t"+means.get(8) // waiting quantile 2
-				+"\t"+means.get(9) // service quantile 2
+				server_queue_spec[0]
+				+"|"+arrival_process_spec[0]+" "+sim.arrival_process.processParameters()//arrival dis
+				+"|"+service_process_spec[0]+" "+sim.service_process.processParameters()// service_ dis
+				+"|"+num_workers
+				+"|"+num_tasks
+				+"|"+k
+				+"|"+sim.server.num_stages
+				+"|"+means.get(0) // sojourn mean
+				+"|"+means.get(1) // waiting mean
+				+"|"+means.get(2) // service mean
+				+"|"+means.get(3) // total
+				+"|"+means.get(4) // sojourn quantile
+				+"|"+means.get(5) // waiting quantile
+				+"|"+means.get(6) // service quanile
+				+"|"+means.get(7) // sojourn quantile 2
+				+"|"+means.get(8) // waiting quantile 2
+				+"|"+means.get(9) // service quantile 2
 				);
 		
 		//sim.jobAutocorrelation(outfile_base, 5000);

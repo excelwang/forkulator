@@ -1,6 +1,7 @@
 package forkulator;
 
 import java.util.LinkedList;
+import java.util.Map;
 
 
 public class FJKLWorkerQueueServer extends FJServer {
@@ -11,6 +12,9 @@ public class FJKLWorkerQueueServer extends FJServer {
 	 * 
 	 */
 	public int l;
+
+	boolean cancelLeftQueued;
+	boolean cancelLeftRunning;
 	
 	/**
 	 * This type of server has a separate queue for each worker.
@@ -26,7 +30,7 @@ public class FJKLWorkerQueueServer extends FJServer {
 	 * 
 	 * @param num_workers
 	 */
-	public FJKLWorkerQueueServer(int num_workers, int l) {
+	public FJKLWorkerQueueServer(int num_workers, int l, boolean cancelLeftQueued, boolean cancelLeftRunning) {
 		super(num_workers);
 		
 		if (l > num_workers) {
@@ -35,12 +39,17 @@ public class FJKLWorkerQueueServer extends FJServer {
 		}
 		
 		this.l = l;
+		this.cancelLeftQueued = cancelLeftQueued;
+		this.cancelLeftRunning = cancelLeftRunning;
 		for (int i=0; i<num_workers; i++) {
 			workers[0][i].queue = new LinkedList<FJTask>();
 		}
 	}
-	
-	
+
+	public FJKLWorkerQueueServer(int num_workers, int l) {
+		this(num_workers,l,true,true);
+	}
+
 	/**
 	 * Check for any idle workers and try to put a task on them.
 	 * 
@@ -77,6 +86,7 @@ public class FJKLWorkerQueueServer extends FJServer {
 		FJTask t = null;
 		while ((t = job.nextTask()) != null) {
 			workers[0][worker_index].queue.add(t);
+			job.queuing_tasks.put(workers[0][worker_index],t);
 			worker_index = (worker_index + 1) % num_workers;
 		}
 		
@@ -84,8 +94,30 @@ public class FJKLWorkerQueueServer extends FJServer {
 		// workers were idle, and put them to work.
 		feedWorkers(job.arrival_time);
 	}
-	
-	
+
+	/**
+	 * Put the task on the specified worker and schedule its completion in the event queue.
+	 *
+	 * @param workerId
+	 * @param task
+	 * @param time
+	 */
+	public void serviceTask(FJWorker worker, FJTask task, double time) {
+		//if (FJSimulator.DEBUG) System.out.println("serviceTask() "+task.ID);
+		worker.current_task = task;
+		if (task != null) {
+			task.worker = worker;
+			task.start_time = time;
+			task.processing = true;
+			if(task.job!=null){//skip orphan tasks.
+				task.job.queuing_tasks.remove(worker);
+				task.job.running_tasks.put(worker,task);
+			}
+			// schedule the task's completion
+			QTaskCompletionEvent e = new QTaskCompletionEvent(task, time + task.service_time);
+			simulator.addEvent(e);
+		}
+	}
 	/**
 	 * Handle a task completion event.  Remove the task from its worker, and
 	 * give the worker a new task, if available.
@@ -103,36 +135,27 @@ public class FJKLWorkerQueueServer extends FJServer {
 		FJTask task = worker.current_task;
 		task.completion_time = time;
 		task.completed = true;
-		
-		if (! task.job.completed) {
-			// check if this task is the l'th of the job.
-			//TODO: this could be more efficient
-			int num_completed = 0;
-			for (FJTask t : task.job.tasks) {
-				num_completed += t.completed ? 1 : 0;
-			}
-
-			if (num_completed == this.l) {
+		if (task.job!=null) {//skip orphan completed tasks.
+			task.job.running_tasks.remove(worker);
+			task.job.completed_tasks.put(worker,task);
+			if (task.job.completed_tasks.size()==this.l) {// check if this task is the l'th of the job.
 				task.job.completed = true;
 				task.job.completion_time = time;
 				task.job.departure_time = time;
+				if (this.cancelLeftQueued) {
+					for (Map.Entry<FJWorker, FJTask> entry : task.job.queuing_tasks.entrySet()) {
+						entry.getKey().queue.remove(entry.getValue());
+					}
+				}
+				if (this.cancelLeftRunning) {
+					for (Map.Entry<FJWorker, FJTask> entry : task.job.running_tasks.entrySet()) {
+						serviceTask(entry.getKey(),entry.getKey().queue.poll(), time);
+					}
+				}
+				jobDepart(task.job);
 				//System.out.println("Job "+task.job.ID+" completed at "+time);
 			}
 		}
-		
-		// if the job is already complete, check if this was the last task
-		// so we can dispose the job object
-		if (task.job.completed) {
-			boolean total_complete = true;
-			for (FJTask t : task.job.tasks) {
-				total_complete = total_complete && t.completed;
-			}
-			if (total_complete) {
-				// sample and dispose of the job
-				jobDepart(task.job);
-			}
-		}
-		
 		// try to start servicing a new task on this worker
 		serviceTask(worker, worker.queue.poll(), time);
 	}

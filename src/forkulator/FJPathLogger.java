@@ -6,6 +6,7 @@ import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.OutputStreamWriter;
 import java.io.Serializable;
+import java.util.Map;
 import java.util.zip.GZIPOutputStream;
 
 /**
@@ -85,7 +86,7 @@ public class FJPathLogger implements Serializable {
 	 * Call this when the job arrives.
 	 * We assume this is called on job in the order that they arrive.
 	 * 
-	 * @param task
+	 * @param job
 	 */
 	public void addJob(FJJob job) {
 		if (job_index < numjobs) {
@@ -103,9 +104,9 @@ public class FJPathLogger implements Serializable {
 	 */
 	public void recordJob(FJJob job) {
 		if (job.path_log_id >= 0) {
-			double job_start_time = job.tasks[0].start_time;
-			for (int i=0; i<job.num_tasks; i++) {
-				job_start_time = Math.min(job_start_time, job.tasks[i].start_time);
+			double jst = Double.MAX_VALUE;
+			for (Map.Entry<FJWorker, FJTask> entry : job.completed_tasks.entrySet()) {
+				jst = Math.min(jst, entry.getValue().start_time);
 			}
 			for (int i=0; i<job.num_tasks; i++) {
 				int ti = job.tasks[i].path_log_id;
@@ -113,7 +114,7 @@ public class FJPathLogger implements Serializable {
 				task_data[ti].task_id = ti;
 				task_data[ti].job_id = job.path_log_id;
 				task_data[ti].job_arrival_time = job.arrival_time;
-				task_data[ti].job_start_time = job_start_time;
+				task_data[ti].job_start_time = jst;
 				task_data[ti].job_completion_time = job.completion_time;
 				task_data[ti].job_departure_time = job.departure_time;
 				task_data[ti].task_completion_time = job.tasks[i].completion_time;

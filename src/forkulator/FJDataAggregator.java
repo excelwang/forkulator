@@ -6,6 +6,7 @@ import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.OutputStreamWriter;
 import java.util.ArrayList;
+import java.util.Map;
 import java.util.zip.GZIPOutputStream;
 import java.io.Serializable;
 
@@ -73,10 +74,10 @@ public class FJDataAggregator implements Serializable {
 	public void sample(FJJob job) {
 		if (job.sample) {
 			job_arrival_time[num_samples] = job.arrival_time;
-			double jst = job.tasks[0].start_time;
-			for (FJTask task : job.tasks) {
-				jst = Math.min(jst, task.start_time);
-			}
+			double jst = Double.MAX_VALUE;
+			for (Map.Entry<FJWorker, FJTask> entry : job.completed_tasks.entrySet()) {
+				jst = Math.min(jst, entry.getValue().start_time);
+			}//TODO: should we consider left RUNNING tasks's START time?
 			job_start_time[num_samples] = jst;
 			job_completion_time[num_samples] = job.completion_time;
 			job_departure_time[num_samples] = job.departure_time;
@@ -247,6 +248,7 @@ public class FJDataAggregator implements Serializable {
 		}
 		
 		double total = num_samples;
+		//System.out.println("num_samples:"+num_samples);
 		ArrayList<Double> result = new ArrayList<Double>(9 + 1);
 		result.add(sojourn_sum/total);
 		result.add(waiting_sum/total);
@@ -284,7 +286,7 @@ public class FJDataAggregator implements Serializable {
 		if (dpdf == null) {
 			System.err.println("WARNING: distribution is null");
 		} else if (n < 1.0/epsilon) {
-			System.err.println("WARNING: datapoints: "+n+"  required: "+(1.0/epsilon)+" for epsilon="+epsilon);
+			System.err.println("WARNING: datapoints: "+n+"  required: "+(1.0/epsilon)+" for epsilon="+epsilon+"\n");
 		} else {
 			long ccdf = n;
 			long last_ccdf = n;
